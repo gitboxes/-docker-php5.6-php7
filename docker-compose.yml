@@ -1,0 +1,157 @@
+version: '3'
+services:
+  php:
+    build: ./images/php71
+    environment:
+      PHP_XDEBUG_ENABLED: 1
+      PHP_IDE_CONFIG: "serverName=bffapi.mobapp.com"
+    container_name: mobapp-php
+    ports:
+      - 9101:9000
+    volumes:
+      - ./data/:/var/www/html
+      - ./config/env/:/var/www/config
+      - ./config/env/:/var/www/configuration
+      - ./logs/bff-api/error.log:/opt/log/php/fpm-error.log
+      - ./logs/bff-api/bff-app.log:/var/log/bff-app.log
+      - ./logs/bff-api/app.log:/var/log/app.log
+    networks:
+      - mobapp
+    extra_hosts:
+      - "mysql:172.17.0.1"
+      - "consumers.mobapp.com:172.17.0.1"
+      - "reporting.mobapp.com:172.17.0.1"
+      - "admin.mobapp.com:172.17.0.1" 
+  consumers:
+    build: ./images/php71
+    environment:
+      PHP_XDEBUG_ENABLED: 1
+      PHP_IDE_CONFIG: "serverName=consumers.mobapp.com"
+    container_name: mobapp-consumers
+    ports:
+      - 9102:9000
+      - 9103:9010
+    volumes:
+      - ./data/:/var/www/html
+      - ./config/env/:/var/www/config
+      - ./config/env/:/var/www/configuration
+      - ./logs/consumers/error.log:/opt/log/php/fpm-error.log
+      - ./logs/consumers/tapcrowd.log:/var/log/tapcrowd.log
+    depends_on:
+      - rabbit
+    networks:
+      - mobapp
+    extra_hosts:
+      - "mysql:172.17.0.1"
+      - "reporting.mobapp.com:172.17.0.1"
+      - "bff-api.mobapp.com:172.17.0.1"
+  reports:
+    build: ./images/php71
+    environment:
+      PHP_XDEBUG_ENABLED: 1
+      PHP_IDE_CONFIG: "serverName=reporting.mobapp.com"
+    container_name: mobapp-reports
+    ports:
+      - 9104:9000
+      - 9105:9010
+    volumes:
+      - ./data/:/var/www/html
+      - ./config/env/:/var/www/config
+      - ./config/env/:/var/www/configuration
+      - ./logs/consumers/error.log:/opt/log/php/fpm-error.log
+      - ./logs/consumers/tapcrowd.log:/var/log/tapcrowd.log
+    depends_on:
+      - rabbit
+    networks:
+      - mobapp
+    extra_hosts:
+      - "mysql:172.17.0.1"
+      - "bff-api.mobapp.com:172.17.0.1"
+      - "consumers.mobapp.com:172.17.0.1"
+  rabbit:
+    image: rabbitmq:3-management
+    container_name: mobapp-rabbit
+    hostname: rabbit.mobapp.com
+    environment:
+      RABBITMQ_ERLANG_COOKIE: SWQOKODSQALRPCLNMEQG
+    volumes:
+      - ./config/enabled_plugins:/etc/rabbitmq/enabled_plugins
+      - ./config/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+    ports:
+      - 15673:15672
+      - 5673:5672
+    networks:
+      - mobapp
+  mongodb:
+    image: mongo
+    container_name: mobapp-mongo
+    ports:
+      - 27017:27017
+    networks:
+      - mobapp
+    volumes:
+      - ./db/mongo:/data/db
+    environment:
+        - MONGO_INITDB_ROOT_USERNAME=mongo
+        - MONGO_INITDB_ROOT_PASSWORD=mongo
+        - MONGO_INITDB_DATABASE=bffmongo
+    depends_on:
+      - consumers
+      - php
+    command: mongod --auth
+  admin:
+    build: ./images/php56
+    environment:
+      PHP_XDEBUG_ENABLED: 1
+      PHP_IDE_CONFIG_ADMIN: "serverName=admin.mobapp.com"
+      PHP_IDE_CONFIG_TAPTARGET: "serverName=taptarget.mobapp.com"
+    container_name: mobapp-admin
+    ports:
+      - 9106:9020
+      - 9107:9030
+    volumes:
+      - ./data/admin/:/var/www/html/admin
+      - ./data/taptarget/:/var/www/html/taptarget
+      - ./config/env/:/var/www/config
+      - ./config/env/:/var/www/configuration
+      - ./logs/admin/error.log:/opt/log/php/fpm-error.log
+      - ./logs/admin/admin.log:/var/log/admin.log
+      - ./logs/admin/app.log:/var/log/app.log
+    networks:
+      - mobapp
+    extra_hosts:
+      - "consumers.mobapp.com:172.17.0.1"
+      - "reporting.mobapp.com:172.17.0.1" 
+      - "bff-api.mobapp.com:172.17.0.1"
+    depends_on: 
+      - mysql  
+  mysql:
+    image: mysql:5.6
+    command: --default-authentication-plugin=mysql_native_password
+    restart: always
+    container_name: mobapp-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - 3306:3306
+    networks:
+      - mobapp
+    volumes: 
+      - ./db/mysql:/var/lib/mysql
+  apache:
+    build: ./images/apache
+    container_name: mobapp-server
+    depends_on:
+      - php
+      - admin
+      - mysql
+    networks:
+      - mobapp
+    ports:
+      - 80:80
+    volumes:
+      - ./data/:/var/www/html
+networks:
+  mobapp:
+    driver: bridge
+ 

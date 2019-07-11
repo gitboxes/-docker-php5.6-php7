@@ -1,0 +1,5 @@
+tapcrowd:
+  password: ${MYSQL_ROOT_PASSWORD}
+  database: ${MYSQL_DATABASE}
+  user: ${MYSQL_USER}
+  password: ${MYSQL_PASSWORD}
